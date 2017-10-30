@@ -53,11 +53,15 @@ If you want an image to be publicly accessible in a post, you have to upload it 
 3. Can't see attached image
 4. HTTP response 404
 
+---
+
 ![attached image logged in](screenshot/attached-image-logged-in.png)
   
 1. Logged-in user
 2. Can see attached image
 3. HTTP response 200
+
+---
 
 ![card background not logged in](screenshot/card-background-not-logged-in.png)
 
@@ -66,6 +70,8 @@ If you want an image to be publicly accessible in a post, you have to upload it 
 3. Can't see user's card background
 4. HTTP response 404
 
+---
+
 ![card background logged in](screenshot/card-background-logged-in.png)
 
 1. Logged-in user
@@ -73,11 +79,15 @@ If you want an image to be publicly accessible in a post, you have to upload it 
 3. Can see user's card background
 4. HTTP response 200
 
+---
+
 ![user background not logged in](screenshot/user-background-not-logged-in.png)
 
 1. Non logged-in user
 2. Can't see user's profile background
 3. HTTP response 404
+
+---
 
 ![user background logged in](screenshot/user-background-logged-in.png)
 
@@ -85,11 +95,15 @@ If you want an image to be publicly accessible in a post, you have to upload it 
 2. Can see user's profile background
 3. HTTP response 200
 
+---
+
 ![public image not logged in](screenshot/public-image-not-logged-in.png)
 
 Non logged-in user
 1. Can see attached image uploaded to `public-images` folder
 2. HTTP response 200
+
+---
 
 ![attached image not logged in 2](screenshot/attached-image-not-logged-in-2.png)
 
