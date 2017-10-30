@@ -1,0 +1,3 @@
+plugins:
+  images_guardian_enabled:
+    default: true
