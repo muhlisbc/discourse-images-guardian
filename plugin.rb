@@ -1,5 +1,5 @@
 # name: discourse-images-guardian
-# about: Discourse plugin
+# about: Discourse plugin that would prevent non-authenticated users from accessing uploaded images
 # version: 0.1
 # authors: Muhlis Budi Cahyono (muhlisbc@gmail.com)
 # url: http://git.dev.abylina.com/momon/discourse-images-guardian
