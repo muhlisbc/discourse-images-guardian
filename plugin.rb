@@ -14,11 +14,14 @@ after_initialize {
     after_action :set_images_guardian_cookie
 
     def set_images_guardian_cookie
-      if (!SiteSetting.images_guardian_enabled || (SiteSetting.images_guardian_enabled && current_user))
-        cookies[:iguard] = {value: ENV["IGUARD_COOKIE"], expires: 1.week.from_now}
-      else
-        cookies[:iguard] = {value: "", expires: 1.year.ago}
-      end      
+      igc_val, igc_exp =  (!SiteSetting.images_guardian_enabled || (SiteSetting.images_guardian_enabled && current_user)) ? [ENV["IGUARD_COOKIE"], 1.week.from_now] : ["", 1.year.ago]
+      cookies[:iguard] = {
+          value: igc_val,
+          expires: igc_exp,
+          httponly: true,
+          secure: SiteSetting.force_https,
+          same_site: :strict
+        }
     end
 
   end
