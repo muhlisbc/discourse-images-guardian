@@ -15,7 +15,7 @@ after_initialize {
 
     def set_images_guardian_cookie
       if (!SiteSetting.images_guardian_enabled || (SiteSetting.images_guardian_enabled && current_user))
-        cookies[:iguard] = {value: ENV["IGUARD_COOKIE"], expires: 5.years.from_now}
+        cookies[:iguard] = {value: ENV["IGUARD_COOKIE"], expires: 1.week.from_now}
       else
         cookies.delete :iguard
       end      
