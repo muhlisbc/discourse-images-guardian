@@ -1,3 +1,25 @@
 plugins:
   images_guardian_enabled:
     default: true
+  images_guardian_site_home_logo_url:
+    default: ""
+  images_guardian_site_logo_url:
+    default: ""
+  images_guardian_site_logo_small_url:
+    default: ""
+  images_guardian_site_digest_logo_url:
+    default: ""
+  images_guardian_site_mobile_logo_url:
+    default: ""
+  images_guardian_site_large_icon_url:
+    default: ""
+  images_guardian_site_favicon_url:
+    default: ""
+  images_guardian_site_apple_touch_icon_url:
+    default: ""
+  images_guardian_opengraph_image_url:
+    default: ""
+  images_guardian_site_twitter_summary_large_image_url:
+    default: ""
+  images_guardian_site_push_notifications_icon_url:
+    default: ""
