@@ -1,6 +1,6 @@
 # name: discourse-images-guardian
 # about: Discourse plugin that would prevent non-authenticated users from accessing uploaded images
-# version: 0.2.0
+# version: 0.2.1
 # authors: Muhlis Budi Cahyono (muhlisbc@gmail.com)
 # url: https://github.com/momon/discourse-images-guardian
 
@@ -31,7 +31,7 @@ after_initialize {
     class << self
 
       {
-        site_home_logo_url: "logo",
+        #site_home_logo_url: "logo",
         site_logo_url: "logo",
         site_logo_small_url: "logo_small",
         site_digest_logo_url: "digest_logo",
@@ -39,7 +39,7 @@ after_initialize {
         site_large_icon_url: "large_icon",
         site_favicon_url: "favicon",
         site_apple_touch_icon_url: "apple_touch_icon",
-        opengraph_image_url: "opengraph_image",
+        site_opengraph_image_url: "opengraph_image",
         site_twitter_summary_large_image_url: "twitter_summary_large_image",
         site_push_notifications_icon_url: "push_notifications_icon"
       }.each do |m, trans|
