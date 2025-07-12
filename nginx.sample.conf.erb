@@ -1,60 +1,65 @@
 # Additional MIME types that you'd like nginx to handle go in here
 types {
-    text/csv csv;
+  text/csv csv;
+  font/ttf ttf;
+  font/otf otf;
 }
 
 upstream discourse {
-  server unix:/var/www/discourse/tmp/sockets/thin.0.sock;
-  server unix:/var/www/discourse/tmp/sockets/thin.1.sock;
-  server unix:/var/www/discourse/tmp/sockets/thin.2.sock;
-  server unix:/var/www/discourse/tmp/sockets/thin.3.sock;
+  server 127.0.0.1:3000;
 }
 
-proxy_cache_path /var/nginx/cache keys_zone=one:10m max_size=200m;
+# inactive means we keep stuff around for 1440m minutes regardless of last access (1 week)
+# levels means it is a 2 deep hierarchy cause we can have lots of files
+# max_size limits the size of the cache
+proxy_cache_path /var/nginx/cache inactive=1440m levels=1:2 keys_zone=one:10m max_size=600m;
 
-# see: https://meta.discourse.org/t/x/74060
-proxy_buffer_size 8k;
+# Increased from the default value to acommodate large cookies during oAuth2 flows
+# like in https://meta.discourse.org/t/x/74060 and large CSP and Link (preload) headers
+proxy_buffer_size 32k;
+proxy_buffers 4 32k;
 
-# If you are going to use Puma, use these:
-#
-# upstream discourse {
-#   server unix:/var/www/discourse/tmp/sockets/puma.sock;
-# }
-
+# Increased from the default value to allow for a large volume of cookies in request headers
+# Discourse itself tries to minimise cookie size, but we cannot control other cookies set by other tools on the same domain.
+large_client_header_buffers 4 32k;
 
 # attempt to preserve the proto, must be in http context
 map $http_x_forwarded_proto $thescheme {
   default $scheme;
-  https https;
+  "~https$" https;
 }
 
-log_format log_discourse '[$time_local] "$http_host" $remote_addr "$request" "$http_user_agent" "$sent_http_x_discourse_route" $status $bytes_sent "$http_referer" $upstream_response_time $request_time "$sent_http_x_discourse_username"';
+log_format log_discourse '[$time_local] "$http_host" $remote_addr "$request" "$http_user_agent" "$sent_http_x_discourse_route" $status $bytes_sent "$http_referer" $upstream_response_time $request_time "$upstream_http_x_discourse_username" "$upstream_http_x_discourse_trackview" "$upstream_http_x_queue_time" "$upstream_http_x_redis_calls" "$upstream_http_x_redis_time" "$upstream_http_x_sql_calls" "$upstream_http_x_sql_time"';
+
+# Allow bypass cache from localhost
+geo $bypass_cache {
+  default         0;
+  127.0.0.1       1;
+  ::1             1;
+}
+
+include conf.d/outlets/before-server/*.conf;
 
 server {
-
   access_log /var/log/nginx/access.log log_discourse;
 
   listen 80;
+
+  include conf.d/outlets/server/*.conf;
+
   gzip on;
   gzip_vary on;
   gzip_min_length 1000;
   gzip_comp_level 5;
-  gzip_types application/json text/css text/javascript application/x-javascript application/javascript image/svg+xml;
-  gzip_proxied any; 
+  gzip_types application/json text/css text/javascript application/x-javascript application/javascript image/svg+xml application/wasm font/ttf font/otf;
+  gzip_proxied any;
 
-  # Uncomment and configure this section for HTTPS support
-  # NOTE: Put your ssl cert in your main nginx config directory (/etc/nginx)
-  #
-  # rewrite ^/(.*) https://enter.your.web.hostname.here/$1 permanent;
-  #
-  # listen 443 ssl;
-  # ssl_certificate your-hostname-cert.pem;
-  # ssl_certificate_key your-hostname-cert.key;
-  # ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
-  # ssl_ciphers HIGH:!aNULL:!MD5;
-  #
+  brotli on;
+  brotli_min_length 1000;
+  brotli_comp_level 4;
+  brotli_types application/json text/css text/javascript application/x-javascript application/javascript image/svg+xml application/wasm font/ttf font/otf;
 
-  server_name enter.your.web.hostname.here;
+  server_name _;
   server_tokens off;
 
   sendfile on;
@@ -93,35 +98,53 @@ server {
     # auth_basic on;
     # auth_basic_user_file /etc/nginx/htpasswd;
 
-    location ~* (assets|plugins|uploads)/.*\.(eot|ttf|woff|woff2|ico)$ {
+    # proxy_set_header directives are inherited from the previous configuration
+    # level if and only if there are no proxy_set_header directives defined on
+    # the current level.
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Request-Start "t=${msec}";
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $thescheme;
+    proxy_set_header X-Sendfile-Type "";
+    proxy_set_header X-Accel-Mapping "";
+    proxy_set_header Client-Ip "";
+
+    location ~ ^/uploads/short-url/ {
+      proxy_pass http://discourse;
+      break;
+    }
+
+    location ~ ^/(secure-media-uploads/|secure-uploads)/ {
+      proxy_pass http://discourse;
+      break;
+    }
+
+    location ~* (fonts|assets|plugins|uploads)/.*\.(eot|ttf|woff|woff2|ico|otf)$ {
       expires 1y;
       add_header Cache-Control public,immutable;
       add_header Access-Control-Allow-Origin *;
-     }
+    }
 
     location = /srv/status {
       access_log off;
       log_not_found off;
-      proxy_set_header Host $http_host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Request-Start "t=${msec}";
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $thescheme;
       proxy_pass http://discourse;
       break;
     }
 
     # some minimal caching here so we don't keep asking
-    # longer term we should increas probably to 1y
+    # longer term we should increase probably to 1y
     location ~ ^/javascripts/ {
       expires 1d;
       add_header Cache-Control public,immutable;
+      add_header Access-Control-Allow-Origin *;
     }
 
     location ~ ^/assets/(?<asset_path>.+)$ {
       expires 1y;
       # asset pipeline enables this
-      # brotli_static on;
+      brotli_static on;
       gzip_static on;
       add_header Cache-Control public,immutable;
       # HOOK in asset location (used for extensibility)
@@ -132,21 +155,20 @@ server {
     location ~ ^/plugins/ {
       expires 1y;
       add_header Cache-Control public,immutable;
+      add_header Access-Control-Allow-Origin *;
     }
 
     # cache emojis
     location ~ /images/emoji/ {
       expires 1y;
       add_header Cache-Control public,immutable;
+      add_header Access-Control-Allow-Origin *;
     }
 
     location ~ ^/uploads/ {
-
-      # NOTE: it is really annoying that we can't just define headers
-      # at the top level and inherit.
-      #
-      # proxy_set_header DOES NOT inherit, by design, we must repeat it,
-      # otherwise headers are not set correctly
+      # proxy_set_header directives are inherited from the previous configuration
+      # level if and only if there are no proxy_set_header directives defined on
+      # the current level.
       proxy_set_header Host $http_host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Request-Start "t=${msec}";
@@ -154,10 +176,11 @@ server {
       proxy_set_header X-Forwarded-Proto $thescheme;
       proxy_set_header X-Sendfile-Type X-Accel-Redirect;
       proxy_set_header X-Accel-Mapping $public/=/downloads/;
-      #expires 1y;
+      proxy_set_header Client-Ip "";
+
+      # expires 1y;
       expires 5m;
-      #add_header Cache-Control public,immutable;
-      add_header Cache-Control public,must-revalidate;
+      add_header Cache-Control public,immutable;
 
       ## optional upload anti-hotlinking rules
       #valid_referers none blocked mysite.com *.mysite.com;
@@ -165,22 +188,30 @@ server {
 
       # custom CSS
       location ~ /stylesheet-cache/ {
+          add_header Access-Control-Allow-Origin *;
           try_files $uri =404;
       }
+
       # this allows us to bypass rails
-      location ~* \.(gif|png|jpg|jpeg|bmp|tif|tiff|svg|ico|webp)$ {
-        if ($cookie_iguard != $iguard_cookie) {
-          return 404;
-        }
-        try_files $uri =404;
+      location ~* \.(gif|png|jpg|jpeg|bmp|tif|tiff|ico|webp|avif)$ {
+          # add_header Access-Control-Allow-Origin *;
+          if ($cookie_iguard != $iguard_cookie) {
+            return 404;
+          }
+          try_files $uri =404;
+      }
+
+      # SVG needs an extra header attached
+      location ~* \.(svg)$ {
       }
 
       # thumbnails & optimized images
       location ~ /_?optimized/ {
-        if ($cookie_iguard != $iguard_cookie) {
-          return 404;
-        }
-        try_files $uri =404;
+          # add_header Access-Control-Allow-Origin *;
+          if ($cookie_iguard != $iguard_cookie) {
+            return 404;
+          }
+          try_files $uri =404;
       }
 
       proxy_pass http://discourse;
@@ -188,6 +219,9 @@ server {
     }
 
     location ~ ^/admin/backups/ {
+      # proxy_set_header directives are inherited from the previous configuration
+      # level if and only if there are no proxy_set_header directives defined on
+      # the current level.
       proxy_set_header Host $http_host;
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Request-Start "t=${msec}";
@@ -195,6 +229,8 @@ server {
       proxy_set_header X-Forwarded-Proto $thescheme;
       proxy_set_header X-Sendfile-Type X-Accel-Redirect;
       proxy_set_header X-Accel-Mapping $public/=/downloads/;
+      proxy_set_header Client-Ip "";
+
       proxy_pass http://discourse;
       break;
     }
@@ -202,12 +238,8 @@ server {
     # This big block is needed so we can selectively enable
     # acceleration for backups, avatars, sprites and so on.
     # see note about repetition above
-    location ~ ^/(svg-sprite/|letter_avatar/|letter_avatar_proxy/|user_avatar|highlight-js|stylesheets|theme-javascripts|favicon/proxied|service-worker) {
-      proxy_set_header Host $http_host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Request-Start "t=${msec}";
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $thescheme;
+    location ~ ^/(svg-sprite/|letter_avatar/|letter_avatar_proxy/|highlight-js|stylesheets|theme-javascripts|favicon/proxied|service-worker|extra-locales/) {
+      brotli_comp_level 6;
 
       # if Set-Cookie is in the response nothing gets cached
       # this is double bad cause we are not passing last modified in
@@ -220,72 +252,40 @@ server {
       proxy_cache one;
       proxy_cache_key "$scheme,$host,$request_uri";
       proxy_cache_valid 200 301 302 7d;
-      proxy_cache_valid any 1m;
+      proxy_cache_bypass $bypass_cache;
       proxy_pass http://discourse;
       break;
     }
 
-    location /user_avatar/ {
+    # This big block is needed so we can selectively enable
+    # acceleration for backups, avatars, sprites and so on.
+    # see note about repetition above
+    location /user_avatar {
       if ($cookie_iguard != $iguard_cookie) {
         return 404;
       }
-
-      proxy_set_header Host $http_host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $thescheme;
+      brotli_comp_level 6;
 
       # if Set-Cookie is in the response nothing gets cached
       # this is double bad cause we are not passing last modified in
       proxy_ignore_headers "Set-Cookie";
       proxy_hide_header "Set-Cookie";
-
-      expires 5m;
-      add_header Cache-Control public,must-revalidate;
+      proxy_hide_header "X-Discourse-Username";
+      proxy_hide_header "X-Runtime";
 
       # note x-accel-redirect can not be used with proxy_cache
       proxy_cache one;
+      proxy_cache_key "$scheme,$host,$request_uri";
       proxy_cache_valid 200 301 302 7d;
-      proxy_cache_valid any 1m;
+      proxy_cache_bypass $bypass_cache;
       proxy_pass http://discourse;
       break;
     }
 
-    location /public-images/ {
-      expires 1y;
-      add_header Cache-Control public,immutable;
-      try_files $uri =404;
-      break;
-    }
 
-    location /letter_avatar_proxy/ {
-      # Don't send any client headers to the avatars service
-      proxy_method GET;
-      proxy_pass_request_headers off;
-      proxy_pass_request_body off;
-
-      # Don't let cookies interrupt caching, and don't pass them to the
-      # client
-      proxy_ignore_headers "Set-Cookie";
-      proxy_hide_header "Set-Cookie";
-
-      proxy_cache one;
-      proxy_cache_key $uri;
-      proxy_cache_valid 200 7d;
-      proxy_cache_valid 404 1m;
-      proxy_set_header Connection "";
-
-      proxy_pass https://avatars.discourse.org/;
-      break;
-    }
 
     # we need buffering off for message bus
     location /message-bus/ {
-      proxy_set_header X-Request-Start "t=${msec}";
-      proxy_set_header Host $http_host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $thescheme;
       proxy_http_version 1.1;
       proxy_buffering off;
       proxy_pass http://discourse;
@@ -302,13 +302,20 @@ server {
   }
 
   location @discourse {
-    add_header Referrer-Policy 'no-referrer-when-downgrade';
+    # fallback to discourse
+    include conf.d/outlets/discourse/*.conf;
+
+    # repeat the default proxy_set_header lines from above because we didn't
+    # get here via a proxy_pass statement
     proxy_set_header Host $http_host;
-    proxy_set_header X-Request-Start "t=${msec}";
     proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Request-Start "t=${msec}";
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $thescheme;
+    proxy_set_header X-Sendfile-Type "";
+    proxy_set_header X-Accel-Mapping "";
+    proxy_set_header Client-Ip "";
     proxy_pass http://discourse;
   }
-
 }
+
