@@ -1,6 +1,6 @@
 # name: discourse-images-guardian
 # about: Discourse plugin that would prevent non-authenticated users from accessing uploaded images
-# version: 0.4.0
+# version: 0.4.1
 # authors: Muhlis Budi Cahyono (muhlisbc@gmail.com)
 # url: https://github.com/momon/discourse-images-guardian
 
@@ -19,6 +19,7 @@ after_initialize do
         ENV["IGUARD_COOKIE"],
         1.week.from_now
       ] : ["", 1.year.ago]
+
       cookies[:iguard] = {
         value: igc_val,
         expires: igc_exp,
@@ -36,7 +37,7 @@ after_initialize do
     class << self
 
       [
-        site_digest_logo_url,
+        :site_digest_logo_url,
         :site_large_icon_url,
         :site_manifest_icon_url,
         :site_apple_touch_icon_url,
